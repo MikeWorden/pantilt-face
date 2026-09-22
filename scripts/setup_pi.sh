@@ -35,6 +35,9 @@ echo "==> Installing Python requirements"
 "${VENV_DIR}/bin/pip" install -r "${PROJECT_DIR}/requirements.txt"
 "${VENV_DIR}/bin/pip" install pantilthat || true  # no-op if apt package already provided it
 
+echo "==> Installing pantilt_face itself (editable) so 'python -m pantilt_face.main' works"
+"${VENV_DIR}/bin/pip" install -e "${PROJECT_DIR}"
+
 echo "==> Downloading face detection model"
 "${PROJECT_DIR}/scripts/download_models.sh"
 

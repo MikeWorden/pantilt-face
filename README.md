@@ -43,6 +43,7 @@ touching the Pi.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
+pip install -e .                 # installs pantilt_face itself so -m works
 ./scripts/download_models.sh     # optional; Haar fallback works without it
 python -m pantilt_face.main
 # open http://localhost:8080
