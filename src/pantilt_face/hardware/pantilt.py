@@ -117,19 +117,35 @@ class PanTiltDriver:
         """Move toward (pan_target_deg, tilt_target_deg), respecting slew and clamps.
 
         `dt` is the wall-clock seconds since the previous call. Returns the
-        actual (pan, tilt) commanded after rate limiting, which the caller
-        should feed back into the PID loop as the true current position.
+        actual (pan, tilt) commanded after rate limiting and debouncing,
+        which the caller should feed back into the PID loop as the true
+        current position.
+
+        Each axis is debounced independently against
+        `HardwareConfig.min_command_delta_deg`: if the slew-limited target
+        is within that of the last *committed* position, the write (and the
+        position update) is skipped rather than sent. This isn't lost --
+        small residual deltas keep accumulating against that same
+        last-committed baseline next tick, so real movement still gets
+        through once it adds up past the threshold; it just stops the servo
+        re-commanding itself every tick for noise that nets out to nothing.
         """
         pan_target_deg = _clamp(pan_target_deg, self.limits.pan_min_deg, self.limits.pan_max_deg)
         tilt_target_deg = _clamp(tilt_target_deg, self.limits.tilt_min_deg, self.limits.tilt_max_deg)
 
         max_step = self.limits.max_slew_deg_s * max(dt, 0.0)
-        new_pan = self._pan_deg + _clamp(pan_target_deg - self._pan_deg, -max_step, max_step)
-        new_tilt = self._tilt_deg + _clamp(tilt_target_deg - self._tilt_deg, -max_step, max_step)
+        candidate_pan = self._pan_deg + _clamp(pan_target_deg - self._pan_deg, -max_step, max_step)
+        candidate_tilt = self._tilt_deg + _clamp(tilt_target_deg - self._tilt_deg, -max_step, max_step)
 
-        self._write(new_pan, new_tilt)
-        self._pan_deg, self._tilt_deg = new_pan, new_tilt
-        return new_pan, new_tilt
+        min_delta = self.hw.min_command_delta_deg
+        if abs(candidate_pan - self._pan_deg) >= min_delta:
+            self._retrying_call(self._backend.pan, int(round(candidate_pan)))
+            self._pan_deg = candidate_pan
+        if abs(candidate_tilt - self._tilt_deg) >= min_delta:
+            self._retrying_call(self._backend.tilt, int(round(candidate_tilt)))
+            self._tilt_deg = candidate_tilt
+
+        return self._pan_deg, self._tilt_deg
 
     def _write(self, pan_deg: float, tilt_deg: float) -> None:
         pan_i = int(round(pan_deg))

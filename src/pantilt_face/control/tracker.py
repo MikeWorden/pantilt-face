@@ -54,6 +54,8 @@ class FaceTracker:
         self.metrics = TrackerMetrics(backend=self.detector.backend_name)
         self._last_tick: Optional[float] = None
         self._fps_ema: Optional[float] = None
+        self._smoothed_center: Optional[tuple[float, float]] = None
+        self._missed_frames = 0
 
     def process(self, frame_rgb: np.ndarray) -> np.ndarray:
         """Runs a full tracking step; returns the frame with HUD burned in
@@ -74,7 +76,8 @@ class FaceTracker:
         self._last_tick = now
 
         if face is not None and face.size >= self.cfg.min_face_size_px:
-            fx, fy = face.center
+            self._missed_frames = 0
+            fx, fy = self._smooth_center(face.center)
             err_x = fx - cx
             err_y = fy - cy
 
@@ -101,6 +104,9 @@ class FaceTracker:
         else:
             # No face: hold position (PID state persists so we don't get a
             # derivative kick when tracking resumes).
+            self._missed_frames += 1
+            if self._missed_frames > self.cfg.smoothing_reset_after_missed_frames:
+                self._smoothed_center = None
             actual_pan, actual_tilt = self.driver.pan_deg, self.driver.tilt_deg
             self.metrics.face_found = False
             self.metrics.error_x_px = 0.0
@@ -122,6 +128,21 @@ class FaceTracker:
 
         return cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
 
+    def _smooth_center(self, raw_center: tuple[int, int]) -> tuple[float, float]:
+        """EMA-debounce the detected face center so per-frame detector noise
+        (a static face's bbox still wobbles a few px frame to frame) doesn't
+        get chased as if it were real movement."""
+        alpha = self.cfg.face_center_smoothing_alpha
+        if self._smoothed_center is None:
+            self._smoothed_center = (float(raw_center[0]), float(raw_center[1]))
+        else:
+            prev_x, prev_y = self._smoothed_center
+            self._smoothed_center = (
+                alpha * raw_center[0] + (1 - alpha) * prev_x,
+                alpha * raw_center[1] + (1 - alpha) * prev_y,
+            )
+        return self._smoothed_center
+
     def _draw_hud(self, frame_bgr: np.ndarray, face: Optional[Face], center: tuple[int, int]) -> None:
         h, w = frame_bgr.shape[:2]
         cx, cy = center
@@ -135,9 +156,16 @@ class FaceTracker:
 
         if face is not None:
             cv2.rectangle(frame_bgr, (face.x, face.y), (face.x + face.w, face.y + face.h), color_ok, 2)
-            fx, fy = face.center
-            cv2.circle(frame_bgr, (fx, fy), 4, color_ok, -1)
-            cv2.line(frame_bgr, (cx, cy), (fx, fy), color_ok, 1)
+            # Raw detection center (small hollow dot) vs. the smoothed
+            # center the control loop actually tracks (filled dot + line) --
+            # the gap between them is exactly the per-frame jitter being
+            # debounced out.
+            raw_fx, raw_fy = face.center
+            cv2.circle(frame_bgr, (raw_fx, raw_fy), 3, color_crosshair, 1)
+            if self._smoothed_center is not None:
+                sfx, sfy = int(self._smoothed_center[0]), int(self._smoothed_center[1])
+                cv2.circle(frame_bgr, (sfx, sfy), 4, color_ok, -1)
+                cv2.line(frame_bgr, (cx, cy), (sfx, sfy), color_ok, 1)
 
         status_color = color_ok if self.metrics.face_found else color_bad
         lines = [

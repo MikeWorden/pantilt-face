@@ -108,6 +108,24 @@ PID gains in `config.py` are untuned starting points — expect to tune
 `kp`/`ki`/`kd` per-axis against the real HAT; behavior on the mock driver
 won't tell you much about real-world settle time or overshoot.
 
+Two things debounce the tracking loop against detector jitter (a static
+face's bbox still wobbles a few px frame-to-frame, which a raw P/D loop
+otherwise chases as if it were real movement):
+
+- `TrackerConfig.face_center_smoothing_alpha` — EMA smoothing on the
+  detected face center before error is computed. Lower = smoother but
+  slower to react to real movement; `1.0` disables it.
+- `HardwareConfig.min_command_delta_deg` — the driver skips writing to a
+  servo when the slew-limited target is closer than this to the last
+  *committed* position, so residual sub-degree noise doesn't re-command the
+  servo every tick.
+
+These interact with `PIDGains.deadzone_px` and `kp`: for a real error to
+ever clear `min_command_delta_deg`, `kp * deadzone_px` should stay above
+it (the defaults — `0.045 * 8 = 0.36°` vs. a `0.3°` threshold — leave some
+margin). Loosen the deadzone or the debounce threshold together if you
+retune one.
+
 ## Troubleshooting
 
 **Tracking moves the wrong way (pans/tilts away from the face instead of

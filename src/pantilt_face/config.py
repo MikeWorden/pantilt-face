@@ -61,6 +61,17 @@ class TrackerConfig:
     # the wrong way" for the empirical test.
     invert_pan: bool = True
     invert_tilt: bool = True
+    # EMA smoothing applied to the detected face center before computing
+    # error, to debounce per-frame detector jitter (a static face's bbox
+    # still wobbles a few px frame-to-frame) so the loop doesn't chase
+    # measurement noise. 1.0 = no smoothing (raw detection each frame);
+    # lower = smoother but slower to react to real movement.
+    face_center_smoothing_alpha: float = 0.4
+    # If the face is lost for this many consecutive frames, drop the
+    # smoothed estimate instead of blending toward wherever it reappears --
+    # otherwise a long absence would make the first few frames back lag
+    # toward the stale pre-loss position.
+    smoothing_reset_after_missed_frames: int = 15
 
 
 @dataclass(frozen=True)
@@ -90,6 +101,14 @@ class HardwareConfig:
     # Force the mock driver even if pantilthat imports cleanly (e.g. running
     # on the Pi with the HAT unplugged for a bench test).
     force_mock: bool = False
+    # Debounce: skip writing to the servo when the slew-limited target is
+    # closer than this to the last commanded position. Without it, residual
+    # sub-degree noise from the control loop keeps re-commanding the servo
+    # every tick, which reads as constant small buzzing/hunting even when
+    # the subject is holding still. Small pending deltas aren't lost -- they
+    # just accumulate against the last *committed* position until they
+    # cross this threshold, or until real movement pushes past it.
+    min_command_delta_deg: float = 0.3
 
 
 @dataclass(frozen=True)

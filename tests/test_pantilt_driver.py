@@ -46,3 +46,28 @@ def test_center_resets_position(driver: PanTiltDriver) -> None:
     driver.center()
     assert driver.pan_deg == 0.0
     assert driver.tilt_deg == 0.0
+
+
+def test_small_target_delta_is_debounced(driver: PanTiltDriver) -> None:
+    # Default min_command_delta_deg is 0.3; a 0.2deg request should be
+    # swallowed rather than sent to the servo.
+    pan, _ = driver.update(pan_target_deg=0.2, tilt_target_deg=0.0, dt=10.0)
+    assert pan == 0.0
+    assert driver._backend.last_pan == 0.0  # noqa: SLF001 - mock introspection
+
+
+def test_target_delta_crossing_threshold_commits(driver: PanTiltDriver) -> None:
+    # A below-threshold request first (debounced, position unchanged), then
+    # a request large enough to clear the threshold against that same
+    # unmoved baseline -- it should commit for the full amount, not just
+    # the increment since the last request.
+    driver.update(pan_target_deg=0.2, tilt_target_deg=0.0, dt=10.0)
+    pan, _ = driver.update(pan_target_deg=1.0, tilt_target_deg=0.0, dt=10.0)
+    assert pan == pytest.approx(1.0)
+    assert driver._backend.last_pan == pytest.approx(1.0)  # noqa: SLF001
+
+
+def test_axes_are_debounced_independently(driver: PanTiltDriver) -> None:
+    pan, tilt = driver.update(pan_target_deg=10.0, tilt_target_deg=0.1, dt=10.0)
+    assert pan == pytest.approx(10.0)  # well above threshold -> commits
+    assert tilt == 0.0  # below threshold -> stays debounced
