@@ -97,6 +97,35 @@ def test_start_position_clamped_to_safe_envelope() -> None:
     assert d.tilt_deg == limits.tilt_min_deg
 
 
+def test_set_led_reaches_mock_backend(driver: PanTiltDriver) -> None:
+    driver.set_led(0, 255, 0)
+    assert driver._backend.last_led_rgb == (0, 255, 0)  # noqa: SLF001
+
+
+def test_led_off_sets_black(driver: PanTiltDriver) -> None:
+    driver.set_led(10, 20, 30)
+    driver.led_off()
+    assert driver._backend.last_led_rgb == (0, 0, 0)  # noqa: SLF001
+
+
+def test_led_unsupported_backend_degrades_without_raising() -> None:
+    class NoLedBackend:
+        def __init__(self) -> None:
+            self.last_pan = 0.0
+            self.last_tilt = 0.0
+
+        def pan(self, angle: int) -> None:
+            self.last_pan = float(angle)
+
+        def tilt(self, angle: int) -> None:
+            self.last_tilt = float(angle)
+
+    d = PanTiltDriver(hw=HardwareConfig(force_mock=True))
+    d._backend = NoLedBackend()  # noqa: SLF001 - simulate an older/bare board
+    d.set_led(255, 0, 0)  # must not raise
+    assert d._led_unsupported  # noqa: SLF001
+
+
 def test_center_returns_to_configured_start_not_hardcoded_zero() -> None:
     limits = ServoLimits(start_pan_deg=15.0, start_tilt_deg=5.0)
     d = PanTiltDriver(limits=limits, hw=HardwareConfig(force_mock=True))

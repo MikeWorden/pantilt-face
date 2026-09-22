@@ -111,6 +111,16 @@ hardware is actually sitting at (0, 0) after a cold boot or power cycle —
 it always explicitly commands this position rather than assuming it.
 Out-of-range values are clamped to the pan/tilt min/max above.
 
+**LED indicator.** `TrackerConfig.led_enabled` / `led_color_found` /
+`led_color_lost` light the HAT's onboard RGB LED green (by default) while a
+face is being tracked, off otherwise — set via `pantilthat.set_all()` /
+`.show()`. This is driven by pantilthat's documented lighting API, but
+board revisions and library versions vary, so it's probed rather than
+assumed: if `set_all`/`show` aren't available, `PanTiltDriver` logs one
+warning and no-ops from then on instead of failing the tracking loop. The
+stream's HUD always draws a matching status dot in the top-right corner
+regardless, so you have a working indicator either way.
+
 PID gains in `config.py` are untuned starting points — expect to tune
 `kp`/`ki`/`kd` per-axis against the real HAT; behavior on the mock driver
 won't tell you much about real-world settle time or overshoot.

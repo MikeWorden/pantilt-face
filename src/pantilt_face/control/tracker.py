@@ -56,6 +56,7 @@ class FaceTracker:
         self._fps_ema: Optional[float] = None
         self._smoothed_center: Optional[tuple[float, float]] = None
         self._missed_frames = 0
+        self._last_led_state: Optional[bool] = None
 
     def process(self, frame_rgb: np.ndarray) -> np.ndarray:
         """Runs a full tracking step; returns the frame with HUD burned in
@@ -116,6 +117,8 @@ class FaceTracker:
         self.metrics.tilt_deg = actual_tilt
         self.metrics.detect_ms = detect_ms
 
+        self._update_led()
+
         if self.cfg.hud_enabled:
             self._draw_hud(frame_bgr, face, (cx, cy))
 
@@ -143,6 +146,19 @@ class FaceTracker:
             )
         return self._smoothed_center
 
+    def _update_led(self) -> None:
+        """Light the HAT's onboard LED on face-found, off otherwise.
+
+        Only writes on a found/lost transition, not every frame -- I2C is
+        the bottleneck resource here and the color doesn't change between
+        transitions, so there's nothing to gain from re-sending it.
+        """
+        if not self.cfg.led_enabled or self.metrics.face_found == self._last_led_state:
+            return
+        color = self.cfg.led_color_found if self.metrics.face_found else self.cfg.led_color_lost
+        self.driver.set_led(*color)
+        self._last_led_state = self.metrics.face_found
+
     def _draw_hud(self, frame_bgr: np.ndarray, face: Optional[Face], center: tuple[int, int]) -> None:
         h, w = frame_bgr.shape[:2]
         cx, cy = center
@@ -167,6 +183,15 @@ class FaceTracker:
                 cv2.circle(frame_bgr, (sfx, sfy), 4, color_ok, -1)
                 cv2.line(frame_bgr, (cx, cy), (sfx, sfy), color_ok, 1)
 
+        # LED status dot, top-right -- mirrors the onboard LED (if the
+        # board/library supports it) so the indicator is visible on the
+        # stream either way.
+        led_rgb = self.cfg.led_color_found if self.metrics.face_found else self.cfg.led_color_lost
+        led_bgr = (led_rgb[2], led_rgb[1], led_rgb[0])
+        dot_color = led_bgr if self.metrics.face_found else (90, 90, 90)
+        cv2.circle(frame_bgr, (w - 18, 18), 8, dot_color, -1)
+        cv2.circle(frame_bgr, (w - 18, 18), 8, color_crosshair, 1)
+
         status_color = color_ok if self.metrics.face_found else color_bad
         lines = [
             f"{self.metrics.backend}  fps:{self.metrics.fps:5.1f}  detect:{self.metrics.detect_ms:5.1f}ms",
@@ -179,6 +204,7 @@ class FaceTracker:
             cv2.putText(frame_bgr, text, (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.42, status_color, 1, cv2.LINE_AA)
 
     def shutdown(self) -> None:
-        """Return to center on exit rather than leaving the gimbal wherever
-        the last tracking frame left it."""
+        """Return to center and turn off the LED on exit rather than
+        leaving the gimbal/LED wherever the last tracking frame left them."""
+        self.driver.led_off()
         self.driver.center()

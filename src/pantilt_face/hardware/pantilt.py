@@ -9,10 +9,12 @@ Wraps Pimoroni's `pantilthat` (I2C bus 1, address 0x15) with:
   - hard clamping to the mechanical safe envelope
   - slew-rate limiting so the PID loop can never demand a faster sweep than
     the gears (and the Pi's power supply) can tolerate
+  - best-effort control of the HAT's onboard RGB LED (SN3218-driven), which
+    degrades to a no-op if the installed pantilthat/board doesn't expose it
 
 Import `PanTiltDriver` and call `.update(pan_deg, tilt_deg, dt)` once per
 control-loop tick; it internally rate-limits and clamps before touching
-hardware.
+hardware. Call `.set_led(r, g, b)` / `.led_off()` for the status LED.
 """
 from __future__ import annotations
 
@@ -28,6 +30,11 @@ logger = logging.getLogger(__name__)
 class _PanTiltBackend(Protocol):
     def pan(self, angle: int) -> None: ...
     def tilt(self, angle: int) -> None: ...
+    # LED control (SN3218-driven onboard RGB LED). Not declared as required
+    # here since it's probed with hasattr() at call time -- older pantilthat
+    # versions or bare boards without the LED wired may not expose it.
+    def set_all(self, r: int, g: int, b: int) -> None: ...
+    def show(self) -> None: ...
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:
@@ -74,6 +81,7 @@ class MockPanTiltBackend:
     def __init__(self) -> None:
         self.last_pan: float = 0.0
         self.last_tilt: float = 0.0
+        self.last_led_rgb: tuple[int, int, int] = (0, 0, 0)
 
     def pan(self, angle: int) -> None:
         self.last_pan = float(angle)
@@ -82,6 +90,13 @@ class MockPanTiltBackend:
     def tilt(self, angle: int) -> None:
         self.last_tilt = float(angle)
         logger.debug("[MOCK] tilt -> %s deg", angle)
+
+    def set_all(self, r: int, g: int, b: int) -> None:
+        self.last_led_rgb = (r, g, b)
+        logger.debug("[MOCK] LED set_all -> rgb(%d, %d, %d)", r, g, b)
+
+    def show(self) -> None:
+        logger.debug("[MOCK] LED show()")
 
 
 class PanTiltDriver:
@@ -99,6 +114,7 @@ class PanTiltDriver:
 
         self._pan_deg = 0.0
         self._tilt_deg = 0.0
+        self._led_unsupported = False
         self.center()  # snap to the configured start position immediately
 
     @property
@@ -153,17 +169,42 @@ class PanTiltDriver:
 
         return self._pan_deg, self._tilt_deg
 
+    def set_led(self, r: int, g: int, b: int) -> None:
+        """Best-effort onboard RGB LED control.
+
+        Not every pantilthat version/board revision exposes set_all()/
+        show() (older library, or a bare board with the LED pads unused),
+        so this is probed once with hasattr() rather than assumed -- an
+        unsupported board logs a single warning and then no-ops silently
+        instead of retrying a call that will never succeed. Real transient
+        I2C failures still go through the normal retry-with-backoff path.
+        """
+        if self._led_unsupported:
+            return
+        if not (hasattr(self._backend, "set_all") and hasattr(self._backend, "show")):
+            logger.warning(
+                "This pantilthat install/board doesn't expose set_all()/show() "
+                "for LED control; the face-found indicator will be HUD-only."
+            )
+            self._led_unsupported = True
+            return
+        self._retrying_call(self._backend.set_all, r, g, b)
+        self._retrying_call(self._backend.show)
+
+    def led_off(self) -> None:
+        self.set_led(0, 0, 0)
+
     def _write(self, pan_deg: float, tilt_deg: float) -> None:
         pan_i = int(round(pan_deg))
         tilt_i = int(round(tilt_deg))
         self._retrying_call(self._backend.pan, pan_i)
         self._retrying_call(self._backend.tilt, tilt_i)
 
-    def _retrying_call(self, fn, value: int) -> None:
+    def _retrying_call(self, fn, *args) -> None:
         attempts = max(1, self.hw.i2c_retries)
         for attempt in range(1, attempts + 1):
             try:
-                fn(value)
+                fn(*args)
                 return
             except Exception as exc:  # noqa: BLE001 - I2C bus errors are opaque
                 if attempt == attempts:

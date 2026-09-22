@@ -82,6 +82,12 @@ class TrackerConfig:
     # otherwise a long absence would make the first few frames back lag
     # toward the stale pre-loss position.
     smoothing_reset_after_missed_frames: int = 15
+    # Onboard HAT LED (and HUD status dot) color for face-found / no-face,
+    # as (r, g, b) 0-255. Set led_enabled=False to skip touching the LED
+    # entirely -- the HUD indicator is drawn either way.
+    led_enabled: bool = True
+    led_color_found: tuple[int, int, int] = (0, 255, 0)
+    led_color_lost: tuple[int, int, int] = (0, 0, 0)
 
 
 @dataclass(frozen=True)
