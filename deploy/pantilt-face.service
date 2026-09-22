@@ -1,0 +1,27 @@
+# systemd unit for running the tracker headless on boot.
+#
+# Install:
+#   sudo cp deploy/pantilt-face.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pantilt-face.service
+#
+# Adjust User/WorkingDirectory/ExecStart paths if the project isn't at
+# /home/pi/pantilt-face.
+[Unit]
+Description=Face-tracking pan-tilt camera
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=i2c
+WorkingDirectory=/home/pi/pantilt-face
+ExecStart=/home/pi/pantilt-face/.venv/bin/python -m pantilt_face.main
+Restart=on-failure
+RestartSec=2
+# Face detection is CPU-bound; keep it from starving other system services.
+CPUWeight=80
+
+[Install]
+WantedBy=multi-user.target

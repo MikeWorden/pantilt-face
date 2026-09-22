@@ -1,0 +1,9 @@
+# Cross-platform (installable in the venv on both the Pi and a dev machine).
+numpy>=1.26,<3
+opencv-python>=4.9,<5     # includes cv2.FaceDetectorYN (YuNet) since 4.5.4
+aiohttp>=3.9,<4
+
+# --- Raspberry Pi only, installed via apt, NOT pip ---
+# The venv must be created with --system-site-packages so these are visible:
+#   sudo apt install -y python3-picamera2 python3-libcamera python3-pantilthat
+# See scripts/setup_pi.sh.
