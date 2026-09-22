@@ -107,3 +107,22 @@ orientation. Set it to `False` if you've mounted the camera right-side up.
 PID gains in `config.py` are untuned starting points — expect to tune
 `kp`/`ki`/`kd` per-axis against the real HAT; behavior on the mock driver
 won't tell you much about real-world settle time or overshoot.
+
+## Troubleshooting
+
+**Tracking moves the wrong way (pans/tilts away from the face instead of
+toward it).** The HUD box tracks correctly but the servo direction is
+backwards. Which pixel-error sign maps to which servo direction depends on
+how your specific HAT is wired and mounted — it isn't derivable from the
+image. Fix it with `TrackerConfig.invert_pan` / `invert_tilt` in
+`config.py` (both default to `True` to match the reference hardware this
+was built against):
+
+1. Cover one eye's worth of test: stand off-center and watch which way the
+   camera moves.
+2. If pan moves away from you, flip `invert_pan`. If tilt moves away,
+   flip `invert_tilt`. They're independent — fix one axis at a time.
+3. Restart the app (or `sudo systemctl restart pantilt-face.service`) after
+   each change.
+
+**Video is upside down.** See `CameraConfig.rotate_180` above.

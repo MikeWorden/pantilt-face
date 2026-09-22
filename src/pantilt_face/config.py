@@ -53,6 +53,14 @@ class TrackerConfig:
     # Faces smaller than this (px, on the longer bbox side) are treated as
     # noise rather than a trackable subject.
     min_face_size_px: int = 24
+    # Whether positive pixel error should map to positive servo delta, per
+    # axis. Which way is "positive" for a given servo depends on how the
+    # HAT/motors are wired and mounted, not something derivable from the
+    # image alone -- if the camera pans/tilts away from the face instead of
+    # toward it, flip the corresponding flag. See README "Tracking moves
+    # the wrong way" for the empirical test.
+    invert_pan: bool = True
+    invert_tilt: bool = True
 
 
 @dataclass(frozen=True)

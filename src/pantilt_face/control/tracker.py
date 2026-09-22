@@ -79,10 +79,17 @@ class FaceTracker:
             err_y = fy - cy
 
             # Positive err_x (face right of center) should pan the camera
-            # right; sign convention here matches a typical HAT mount --
-            # flip if your servo travels the wrong way.
-            pan_delta = self.pan_pid.step(err_x, now=now)
-            tilt_delta = self.tilt_pid.step(-err_y, now=now)  # image y grows downward
+            # right, and positive err_y (face below center, since image y
+            # grows downward) should tilt down -- i.e. the PID input is
+            # -err_y so it drives toward zero the same way. Whether that
+            # actually matches "right"/"down" on the physical servo is a
+            # wiring/mount fact, not something derivable from the image, so
+            # it's controlled by TrackerConfig.invert_pan/invert_tilt.
+            pan_input = -err_x if self.cfg.invert_pan else err_x
+            tilt_input = err_y if self.cfg.invert_tilt else -err_y
+
+            pan_delta = self.pan_pid.step(pan_input, now=now)
+            tilt_delta = self.tilt_pid.step(tilt_input, now=now)
 
             target_pan = self.driver.pan_deg + pan_delta
             target_tilt = self.driver.tilt_deg + tilt_delta
