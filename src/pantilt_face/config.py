@@ -20,6 +20,16 @@ class ServoLimits:
     tilt_max_deg: float = 50.0
     max_slew_deg_s: float = 120.0  # gear-stripping / brownout guard
 
+    # Position the gimbal snaps to immediately on startup, and returns to on
+    # shutdown -- there's no feedback from the HAT on where it physically
+    # is, so the driver can't assume (0, 0) is actually where it's sitting
+    # (e.g. after a power cycle without a clean shutdown). Defaults to
+    # dead-center; override if you want it looking at a specific spot when
+    # the service comes up cold. Out-of-range values are clamped to the
+    # limits above rather than rejected.
+    start_pan_deg: float = 0.0
+    start_tilt_deg: float = 0.0
+
 
 @dataclass(frozen=True)
 class CameraConfig:

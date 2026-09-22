@@ -99,6 +99,7 @@ class PanTiltDriver:
 
         self._pan_deg = 0.0
         self._tilt_deg = 0.0
+        self.center()  # snap to the configured start position immediately
 
     @property
     def pan_deg(self) -> float:
@@ -109,9 +110,14 @@ class PanTiltDriver:
         return self._tilt_deg
 
     def center(self) -> None:
-        self._pan_deg = 0.0
-        self._tilt_deg = 0.0
-        self._write(0.0, 0.0)
+        """Move immediately to ServoLimits.start_pan_deg/start_tilt_deg
+        (0,0 by default), bypassing slew and debounce. Called on startup
+        and on shutdown, so the gimbal has a known, deliberate resting pose
+        rather than whatever the hardware happened to be left at."""
+        self._pan_deg = _clamp(self.limits.start_pan_deg, self.limits.pan_min_deg, self.limits.pan_max_deg)
+        self._tilt_deg = _clamp(self.limits.start_tilt_deg, self.limits.tilt_min_deg, self.limits.tilt_max_deg)
+        self._write(self._pan_deg, self._tilt_deg)
+        logger.info("Pan-Tilt moved to home position: pan=%.1f tilt=%.1f", self._pan_deg, self._tilt_deg)
 
     def update(self, pan_target_deg: float, tilt_target_deg: float, dt: float) -> tuple[float, float]:
         """Move toward (pan_target_deg, tilt_target_deg), respecting slew and clamps.

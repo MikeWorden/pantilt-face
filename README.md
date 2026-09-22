@@ -104,6 +104,13 @@ the CSI ribbon cable's range of motion.
 bracket mounts the camera board upside down relative to a normal handheld
 orientation. Set it to `False` if you've mounted the camera right-side up.
 
+`ServoLimits.start_pan_deg` / `start_tilt_deg` (default `0.0`/`0.0`) set the
+angle the gimbal moves to immediately on startup and returns to on shutdown.
+There's no position feedback from the HAT, so the driver can't assume the
+hardware is actually sitting at (0, 0) after a cold boot or power cycle —
+it always explicitly commands this position rather than assuming it.
+Out-of-range values are clamped to the pan/tilt min/max above.
+
 PID gains in `config.py` are untuned starting points — expect to tune
 `kp`/`ki`/`kd` per-axis against the real HAT; behavior on the mock driver
 won't tell you much about real-world settle time or overshoot.

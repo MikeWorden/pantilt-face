@@ -71,3 +71,36 @@ def test_axes_are_debounced_independently(driver: PanTiltDriver) -> None:
     pan, tilt = driver.update(pan_target_deg=10.0, tilt_target_deg=0.1, dt=10.0)
     assert pan == pytest.approx(10.0)  # well above threshold -> commits
     assert tilt == 0.0  # below threshold -> stays debounced
+
+
+def test_default_start_position_is_zero_zero(driver: PanTiltDriver) -> None:
+    assert driver.pan_deg == 0.0
+    assert driver.tilt_deg == 0.0
+    assert driver._backend.last_pan == 0.0  # noqa: SLF001
+    assert driver._backend.last_tilt == 0.0  # noqa: SLF001
+
+
+def test_custom_start_position_applied_on_init() -> None:
+    limits = ServoLimits(start_pan_deg=20.0, start_tilt_deg=-10.0)
+    d = PanTiltDriver(limits=limits, hw=HardwareConfig(force_mock=True))
+    assert d.pan_deg == pytest.approx(20.0)
+    assert d.tilt_deg == pytest.approx(-10.0)
+    # Actually written to hardware, not just tracked internally.
+    assert d._backend.last_pan == pytest.approx(20.0)  # noqa: SLF001
+    assert d._backend.last_tilt == pytest.approx(-10.0)  # noqa: SLF001
+
+
+def test_start_position_clamped_to_safe_envelope() -> None:
+    limits = ServoLimits(start_pan_deg=999.0, start_tilt_deg=-999.0)
+    d = PanTiltDriver(limits=limits, hw=HardwareConfig(force_mock=True))
+    assert d.pan_deg == limits.pan_max_deg
+    assert d.tilt_deg == limits.tilt_min_deg
+
+
+def test_center_returns_to_configured_start_not_hardcoded_zero() -> None:
+    limits = ServoLimits(start_pan_deg=15.0, start_tilt_deg=5.0)
+    d = PanTiltDriver(limits=limits, hw=HardwareConfig(force_mock=True))
+    d.update(pan_target_deg=-50, tilt_target_deg=-30, dt=10.0)
+    d.center()
+    assert d.pan_deg == pytest.approx(15.0)
+    assert d.tilt_deg == pytest.approx(5.0)
