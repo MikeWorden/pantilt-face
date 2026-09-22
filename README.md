@@ -100,6 +100,10 @@ envelope (pan ±75°, tilt −40°/+50°, 120°/s slew cap) matches CLAUDE.md an
 should not be loosened without re-checking the HAT's mechanical limits and
 the CSI ribbon cable's range of motion.
 
+`CameraConfig.rotate_180` defaults to `True` because the Pan-Tilt HAT's
+bracket mounts the camera board upside down relative to a normal handheld
+orientation. Set it to `False` if you've mounted the camera right-side up.
+
 PID gains in `config.py` are untuned starting points — expect to tune
 `kp`/`ki`/`kd` per-axis against the real HAT; behavior on the mock driver
 won't tell you much about real-world settle time or overshoot.

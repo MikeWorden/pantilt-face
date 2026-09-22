@@ -34,15 +34,20 @@ class _CaptureBackend:
 
 class _Picamera2Backend(_CaptureBackend):
     def __init__(self, cfg: CameraConfig) -> None:
+        from libcamera import Transform  # type: ignore
         from picamera2 import Picamera2  # type: ignore
 
         self._cam = Picamera2()
+        transform = Transform(hflip=cfg.rotate_180, vflip=cfg.rotate_180)
         config = self._cam.create_video_configuration(
-            main={"size": (cfg.width, cfg.height), "format": cfg.pixel_format}
+            main={"size": (cfg.width, cfg.height), "format": cfg.pixel_format},
+            transform=transform,
         )
         self._cam.configure(config)
         self._cam.start()
-        logger.info("Picamera2 started at %dx%d", cfg.width, cfg.height)
+        logger.info(
+            "Picamera2 started at %dx%d (rotate_180=%s)", cfg.width, cfg.height, cfg.rotate_180
+        )
 
     def read(self) -> Optional[np.ndarray]:
         return self._cam.capture_array()
@@ -58,18 +63,25 @@ class _OpenCVBackend(_CaptureBackend):
         import cv2
 
         self._cv2 = cv2
+        self._rotate_180 = cfg.rotate_180
         self._cap = cv2.VideoCapture(source)
         if not self._cap.isOpened():
             raise RuntimeError(f"cv2.VideoCapture could not open source {source!r}")
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.width)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.height)
         self._cap.set(cv2.CAP_PROP_FPS, cfg.capture_fps)
-        logger.info("OpenCV VideoCapture(%r) opened as camera fallback", source)
+        logger.info(
+            "OpenCV VideoCapture(%r) opened as camera fallback (rotate_180=%s)",
+            source,
+            cfg.rotate_180,
+        )
 
     def read(self) -> Optional[np.ndarray]:
         ok, frame = self._cap.read()
         if not ok:
             return None
+        if self._rotate_180:
+            frame = self._cv2.flip(frame, -1)  # flip both axes = 180deg rotation
         # BGR -> RGB to match Picamera2's RGB888 output, so downstream code
         # (detector, HUD, JPEG encode-back-to-BGR) doesn't need to branch.
         return self._cv2.cvtColor(frame, self._cv2.COLOR_BGR2RGB)

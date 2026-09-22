@@ -28,6 +28,10 @@ class CameraConfig:
     capture_fps: int = 30
     # picamera2 format; ignored by the webcam/mock fallback.
     pixel_format: str = "RGB888"
+    # The Pimoroni Pan-Tilt HAT's bracket mounts the camera board upside
+    # down relative to a normal handheld orientation. True by default to
+    # match that mount; set False if your camera is mounted right-side up.
+    rotate_180: bool = True
 
 
 @dataclass(frozen=True)
